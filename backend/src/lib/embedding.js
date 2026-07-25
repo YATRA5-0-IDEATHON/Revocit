@@ -39,5 +39,13 @@ function cosineSimilarity(a, b) {
 module.exports = {
   EMBEDDING_DIM,
   toVector,
-  cosineSimilarity
+  cosineSimilarity,
+  async embedPinecone(client, inputs, inputType) {
+    const response = await client.inference.embed({
+      model: process.env.PINECONE_EMBEDDING_MODEL || "multilingual-e5-large",
+      inputs,
+      parameters: { inputType, truncate: "END" }
+    });
+    return response.data.map((item) => item.values);
+  }
 };

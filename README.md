@@ -39,6 +39,22 @@ copy .env.example .env
 - VECTOR_PROVIDER as pinecone or weaviate
 - provider-specific keys (PINECONE_* or WEAVIATE_*)
 
+For the bundled English legal PDFs, Pinecone is required. Create a dense Pinecone
+index with dimension **1024** (the output size of `multilingual-e5-large`) and set:
+
+```
+VECTOR_PROVIDER=pinecone
+PINECONE_API_KEY=...
+PINECONE_INDEX=...
+PINECONE_NAMESPACE=lawyersathi
+PINECONE_EMBEDDING_MODEL=multilingual-e5-large
+```
+
+On startup the service reads every PDF in `C:\Users\user\Desktop\english files`,
+extracts every page, chunks it with overlap, and upserts it into that namespace.
+Use `POST /api/rag/reindex` after adding or replacing PDFs. Set `PDF_SOURCE_DIR`
+only when the PDFs live elsewhere.
+
 4. Start the app:
 
 ```bash

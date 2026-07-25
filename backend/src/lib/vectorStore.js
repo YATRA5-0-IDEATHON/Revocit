@@ -17,6 +17,7 @@ async function createVectorStore() {
     return {
       provider: "pinecone",
       ready: true,
+      client,
       async upsert(vectors) {
         await index.upsert(vectors);
       },
