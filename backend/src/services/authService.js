@@ -15,7 +15,11 @@ function saveUsers(users) {
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 }
 
-function publicUser(user) { return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt }; }
+function publicUser(user) {
+  const questionsUsed = Number(user.questionsUsed || 0);
+  const plan = user.plan || "trial";
+  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, plan, questionsUsed, questionsRemaining: plan === "trial" ? Math.max(0, 5 - questionsUsed) : null };
+}
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -50,7 +54,7 @@ function getSessionUser(token) {
 function createUser({ name, email, password }) {
   const users = readUsers();
   if (users.some((user) => user.email === email.toLowerCase())) throw new Error("An account already exists for this email.");
-  const user = { id: crypto.randomUUID(), name, email: email.toLowerCase(), passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+  const user = { id: crypto.randomUUID(), name, email: email.toLowerCase(), passwordHash: hashPassword(password), plan: "trial", questionsUsed: 0, createdAt: new Date().toISOString() };
   users.push(user); saveUsers(users); return user;
 }
 
@@ -59,4 +63,24 @@ function authenticate({ email, password }) {
   return user && matchesPassword(password, user.passwordHash) ? user : null;
 }
 
-module.exports = { createUser, authenticate, getSessionUser, signSession, publicUser, sessionAgeMs };
+function activatePlan(userId, plan) {
+  const users = readUsers();
+  const user = users.find((item) => item.id === userId);
+  if (!user) return null;
+  user.plan = plan;
+  user.subscriptionStartedAt = new Date().toISOString();
+  saveUsers(users);
+  return user;
+}
+
+function recordQuestion(userId) {
+  const users = readUsers();
+  const user = users.find((item) => item.id === userId);
+  if (!user) return { allowed: false, reason: "not_found" };
+  if ((user.plan || "trial") === "trial" && Number(user.questionsUsed || 0) >= 5) return { allowed: false, reason: "subscription_required", user };
+  user.questionsUsed = Number(user.questionsUsed || 0) + 1;
+  saveUsers(users);
+  return { allowed: true, user };
+}
+
+module.exports = { createUser, authenticate, getSessionUser, signSession, publicUser, activatePlan, recordQuestion, sessionAgeMs };

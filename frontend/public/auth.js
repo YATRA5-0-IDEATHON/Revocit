@@ -26,11 +26,25 @@ async function submitAuthForm(event) {
     const response = await fetch(form.dataset.endpoint, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to continue.");
-    window.location.assign("/profile.html");
+    window.location.assign(form.dataset.endpoint === "/api/auth/signup" ? "/subscription.html" : "/profile.html");
   } catch (error) { message.textContent = error.message; button.disabled = false; }
 }
 
 document.querySelectorAll("[data-auth-form]").forEach((form) => form.addEventListener("submit", submitAuthForm));
+document.querySelectorAll(".pricing-grid .price-card").forEach((card, index) => {
+  const plan = index === 1 ? "standard" : index === 2 ? "professional" : null;
+  const button = card.querySelector("a.btn");
+  if (!plan || !button) return;
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const me = await fetch("/api/auth/me", { credentials: "same-origin" }).then((response) => response.json());
+    if (!me.user) { window.location.assign("/signup.html"); return; }
+    button.textContent = "Activating...";
+    const response = await fetch("/api/subscription/select", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }) });
+    if (response.ok) window.location.assign("/chat.html");
+    else { button.textContent = "Try again"; }
+  });
+});
 document.querySelectorAll("[data-logout]").forEach((button) => button.addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); window.location.assign("/"); }));
 
 document.querySelectorAll(".navbar-inner").forEach((navbar) => {

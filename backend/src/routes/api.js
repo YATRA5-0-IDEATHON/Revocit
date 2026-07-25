@@ -1,7 +1,7 @@
 const express = require("express");
 const { queryRag, indexDocuments } = require("../services/ragService");
 const { formatDocument, convertDate, buildCaseDraft } = require("../services/legalToolsService");
-const { createUser, authenticate, getSessionUser, signSession, publicUser, sessionAgeMs } = require("../services/authService");
+const { createUser, authenticate, getSessionUser, signSession, publicUser, activatePlan, recordQuestion, sessionAgeMs } = require("../services/authService");
 
 const router = express.Router();
 
@@ -38,17 +38,30 @@ router.post("/auth/login", (req, res) => {
 
 router.post("/auth/logout", (req, res) => { res.clearCookie("lawyersathi_session", { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" }); res.status(204).end(); });
 
+router.post("/subscription/select", (req, res) => {
+  const user = getSessionUser(getCookie(req, "lawyersathi_session"));
+  const plan = String(req.body?.plan || "");
+  if (!user) return res.status(401).json({ error: "Please log in to select a subscription." });
+  if (!["standard", "professional"].includes(plan)) return res.status(400).json({ error: "Choose a valid subscription." });
+  const updatedUser = activatePlan(user.id, plan);
+  res.json({ user: publicUser(updatedUser) });
+});
+
 router.get("/health", (req, res) => {
   res.json({ status: "ok", service: "lawyersathi-api" });
 });
 
 router.post("/rag/query", async (req, res) => {
+  const user = getSessionUser(getCookie(req, "lawyersathi_session"));
+  if (!user) return res.status(401).json({ error: "Please log in to use the legal workspace.", code: "login_required" });
   const query = String(req.body?.query || "").trim();
   const lang = String(req.body?.lang || "en").trim();
   const audience = String(req.body?.audience || "citizen").trim();
   if (!query) {
     return res.status(400).json({ error: "query is required" });
   }
+  const questionAllowance = recordQuestion(user.id);
+  if (!questionAllowance.allowed) return res.status(402).json({ error: "Your five free questions have been used. Choose a subscription to continue.", code: "subscription_required" });
 
   const result = await queryRag({ query, lang, audience, topK: 4 });
   res.json(result);

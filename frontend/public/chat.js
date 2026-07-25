@@ -1,5 +1,6 @@
 const state = {
-  lang: "en"
+  lang: "en",
+  user: null
 };
 
 const i18n = {
@@ -45,6 +46,22 @@ function applyLanguage() {
   document.getElementById("langToggle").textContent = state.lang === "en" ? "नेपाली" : "English";
 }
 
+function renderUsage() {
+  const node = document.getElementById("usageStatus");
+  if (!node || !state.user) return;
+  node.textContent = state.user.plan === "trial"
+    ? `${state.user.questionsRemaining} ${state.lang === "ne" ? "निःशुल्क प्रश्न बाँकी" : "free questions remaining"}`
+    : `${state.user.plan === "professional" ? "Professional" : "Standard"} ${state.lang === "ne" ? "सदस्यता" : "subscription"}`;
+}
+
+async function loadSession() {
+  const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+  const data = await response.json();
+  if (!data.user) { window.location.replace("/login.html"); return; }
+  state.user = data.user;
+  renderUsage();
+}
+
 function escapeHtml(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -65,6 +82,7 @@ async function queryAssistant(prompt) {
   const audience = document.getElementById("audience").value;
   const response = await fetch("/api/rag/query", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query: prompt,
@@ -113,10 +131,14 @@ async function submitQuestion(prompt) {
       loadingNode.closest("article")?.remove();
     }
     renderAssistantResult(result);
+    if (state.user?.plan === "trial") { state.user.questionsRemaining = Math.max(0, state.user.questionsRemaining - 1); renderUsage(); }
   } catch (error) {
     const loadingNode = document.getElementById(loadingId);
     if (loadingNode) {
-      loadingNode.textContent = error.message;
+      loadingNode.closest("article")?.remove();
+      if (String(error.message).includes("five free questions")) {
+        appendMessage("assistant", `<p>${escapeHtml(error.message)} <a href="/subscription.html">${state.lang === "ne" ? "सदस्यता छान्नुहोस्" : "Choose a subscription"}</a></p>`);
+      } else appendMessage("assistant", `<p>${escapeHtml(error.message)}</p>`);
     }
   }
 }
@@ -124,6 +146,7 @@ async function submitQuestion(prompt) {
 document.getElementById("langToggle").addEventListener("click", () => {
   state.lang = state.lang === "en" ? "ne" : "en";
   applyLanguage();
+  renderUsage();
 });
 
 document.getElementById("send").addEventListener("click", () => {
@@ -147,3 +170,4 @@ document.querySelectorAll(".prompt-chip").forEach((button) => {
 });
 
 applyLanguage();
+loadSession();
