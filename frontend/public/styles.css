@@ -43,6 +43,7 @@ body { margin: 0; font-family: "Manrope", "Noto Sans Devanagari", sans-serif; co
 .login-link { color: var(--navy) !important; }
 [hidden] { display: none !important; }
 .nav-button { border:0; background:transparent; cursor:pointer; font:inherit; }
+.nav-links [data-logout] { display:none !important; }
 .btn-ghost { color: var(--navy); background: #fff; border-color: #cdd9e5; }
 
 .hero { position: relative; overflow: hidden; padding: 78px 0 70px; background: linear-gradient(110deg, #f8fbff 0%, #f6f9fc 62%, #edf3f8 100%); }

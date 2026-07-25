@@ -107,7 +107,10 @@ async function queryAssistant(prompt) {
 function renderAssistantResult(result) {
   const nextSteps = (result.nextSteps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   const citations = (result.citations || [])
-    .map((item) => `<li><strong>${escapeHtml(item.title)}</strong>${item.page ? ` — ${state.lang === "ne" ? "पृष्ठ" : "page"} ${escapeHtml(item.page)}` : ""} (${escapeHtml(item.category)})</li>`)
+    .map((item) => {
+      const title = String(item.title || "").replace(/_[A-Za-z0-9]{5,}$/i, "").replace(/_/g, " ");
+      return `<li><strong>${escapeHtml(title)}</strong>${item.page ? ` — ${state.lang === "ne" ? "पृष्ठ" : "page"} ${escapeHtml(item.page)}` : ""}</li>`;
+    })
     .join("");
 
   appendMessage(

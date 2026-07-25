@@ -1,6 +1,6 @@
 const { createVectorStore } = require("../lib/vectorStore");
 const { embedPinecone } = require("../lib/embedding");
-const { loadPdfChunks } = require("./pdfIngestionService");
+const { listPdfFiles, loadPdfChunks } = require("./pdfIngestionService");
 
 const LANGUAGES = ["en", "ne"];
 const RATE_LIMIT_RETRY_MS = 61000;
@@ -25,25 +25,34 @@ async function indexCorpus(language) {
   if (!store?.ready || store.provider !== "pinecone") {
     return { language, indexed: 0, ready: false, reason: store?.reason || "Pinecone index is not configured" };
   }
-  const corpus = await loadPdfChunks(language);
   const batchSize = 96;
-  for (let offset = 0; offset < corpus.chunks.length; offset += batchSize) {
-    const batch = corpus.chunks.slice(offset, offset + batchSize);
-    let embeddings;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      try {
-        embeddings = await embedPinecone(store.client, batch.map((item) => item.text), "passage");
-        break;
-      } catch (error) {
-        const rateLimited = error?.status === 429 || /RESOURCE_EXHAUSTED|tokens per minute/i.test(String(error?.message));
-        if (!rateLimited || attempt === 3) throw error;
-        console.log(`${language} embedding rate limit reached; resuming in ${RATE_LIMIT_RETRY_MS / 1000}s...`);
-        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_MS));
+  const { files } = await listPdfFiles(language);
+  const orderedFiles = language === "ne"
+    ? [...files].sort((a, b) => Number(b.includes("अपराध")) - Number(a.includes("अपराध")))
+    : files;
+  let indexed = 0;
+  for (const fileName of orderedFiles) {
+    const corpus = await loadPdfChunks(language, [fileName]);
+    for (let offset = 0; offset < corpus.chunks.length; offset += batchSize) {
+      const batch = corpus.chunks.slice(offset, offset + batchSize);
+      let embeddings;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          embeddings = await embedPinecone(store.client, batch.map((item) => item.text), "passage");
+          break;
+        } catch (error) {
+          const rateLimited = error?.status === 429 || /RESOURCE_EXHAUSTED|tokens per minute/i.test(String(error?.message));
+          if (!rateLimited || attempt === 3) throw error;
+          console.log(`${language} embedding rate limit reached; resuming in ${RATE_LIMIT_RETRY_MS / 1000}s...`);
+          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_MS));
+        }
       }
+      await store.upsert(batch.map((item, index) => ({ id: item.id, values: embeddings[index], metadata: { ...item.metadata, text: item.text } })));
+      indexed += batch.length;
+      console.log(`${language} indexed ${indexed} chunks; latest source: ${fileName}`);
     }
-    await store.upsert(batch.map((item, index) => ({ id: item.id, values: embeddings[index], metadata: { ...item.metadata, text: item.text } })));
   }
-  return { language, indexName: store.indexName, indexed: corpus.chunks.length, files: corpus.files, ready: true };
+  return { language, indexName: store.indexName, indexed, files: orderedFiles, ready: true };
 }
 
 async function indexDocuments({ language } = {}) {
@@ -56,18 +65,23 @@ async function indexDocuments({ language } = {}) {
 async function generateAnswer({ query, context, language, audience }) {
   const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
   const model = process.env.OLLAMA_MODEL || "qwen3:4b";
-  const languageRule = language === "ne" ? "Respond only in clear Nepali (Devanagari). The supplied legal passages are Nepali; preserve their legal meaning and terminology." : "Respond only in clear English. The supplied legal passages are English; preserve their legal meaning and terminology.";
-  const system = `You are a Nepal legal-information assistant for a ${audience} audience. ${languageRule} Use only the supplied source passages in their original language. Do not translate, invent, or alter legal terms, section numbers, facts, or procedures. If the passages do not answer the question, say that clearly. Give concise legal information, not legal advice.`;
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, stream: false, options: { temperature: 0.1 }, messages: [
-      { role: "system", content: system },
-      { role: "user", content: `Source passages:\n${context}\n\nQuestion: ${query}` }
-    ] })
-  });
-  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-  const result = await response.json();
-  const answer = String(result.message?.content || "").trim();
+  const languageRule = language === "ne"
+    ? "Respond only in clear Nepali (Devanagari). The supplied legal passages are Nepali; preserve their legal meaning and terminology."
+    : "Respond only in clear English. The supplied legal passages are English; preserve their legal meaning and terminology.";
+  const system = `You are a Nepal legal-information assistant for a ${audience} audience. ${languageRule} Use only the supplied source passages and preserve their legal meaning, legal terms, section numbers, facts, and procedures. If the passages do not answer the question, say that clearly. Give a concise direct answer. Output plain text only: do not use Markdown, asterisks, headings, source lists, or statements about being based on supplied passages, translations, external knowledge, or your answering process.`;
+  let answer = "";
+  for (let attempt = 0; attempt < 2 && !answer; attempt += 1) {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0.1 }, messages: [
+        { role: "system", content: system },
+        { role: "user", content: `Source passages:\n${context}\n\nQuestion: ${query}` }
+      ] })
+    });
+    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+    const result = await response.json();
+    answer = String(result.message?.content || "").replace(/\*+/g, "").trim();
+  }
   if (!answer) throw new Error("Ollama returned an empty response");
   return answer;
 }
@@ -90,13 +104,13 @@ async function queryRag({ query, audience = "citizen", topK = 4 }) {
     const answer = await generateAnswer({ query, context, language, audience });
     return {
       answer,
-      nextSteps: [nativeMessage(language, "Review the cited source page before acting on this information.", "निर्णय वा कारबाहीअघि उद्धृत स्रोतको सम्बन्धित पृष्ठ जाँच्नुहोस्।")],
+      nextSteps: [],
       citations: matches.map((match) => ({ title: match.metadata?.title || "Legal source", category: match.metadata?.category || "general", sourceUrl: match.metadata?.sourceFile || "", page: match.metadata?.page || null })),
       meta: { provider: "pinecone", indexName: store.indexName, model: process.env.OLLAMA_MODEL || "qwen3:4b", language, vectorReady: true, retrieval: "vector" }
     };
   } catch (error) {
     console.error(`${language} RAG query failed:`, error.message);
-    return { answer: nativeMessage(language, "Could not generate an answer. Check Ollama and the Qwen model.", "उत्तर तयार गर्न सकिएन। Ollama र Qwen मोडेल जाँच्नुहोस्।"), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "error", indexName: store.indexName } };
+    return { answer: nativeMessage(language, "Could not generate an answer. Please try again.", "उत्तर तयार हुन सकेन। कृपया फेरि प्रयास गर्नुहोस्।"), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "error", indexName: store.indexName } };
   }
 }
 

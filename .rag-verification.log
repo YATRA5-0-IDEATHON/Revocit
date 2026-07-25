@@ -1,0 +1,16 @@
+Vector provider: {
+  en: {
+    provider: 'pinecone',
+    ready: true,
+    indexName: 'lawyersathi',
+    reason: null
+  },
+  ne: {
+    provider: 'pinecone',
+    ready: true,
+    indexName: 'lawyersathinepali',
+    reason: null
+  }
+}
+Using existing Pinecone indexes. Set AUTO_REINDEX=true only when the source PDF folders are available.
+Lawyersathi running at http://localhost:3010

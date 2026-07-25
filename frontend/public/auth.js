@@ -46,6 +46,16 @@ document.querySelectorAll(".pricing-grid .price-card").forEach((card, index) => 
   });
 });
 document.querySelectorAll("[data-logout]").forEach((button) => button.addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); window.location.assign("/"); }));
+if (document.body.dataset.profilePage === "true") {
+  const profileCard = document.querySelector(".subpage-card");
+  if (profileCard) {
+    const logout = document.createElement("button");
+    logout.type = "button"; logout.className = "btn btn-ghost"; logout.textContent = "Log out";
+    logout.style.marginTop = "22px";
+    logout.addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); window.location.assign("/"); });
+    profileCard.appendChild(logout);
+  }
+}
 
 document.querySelectorAll(".navbar-inner").forEach((navbar) => {
   const links = navbar.querySelector(".nav-links");

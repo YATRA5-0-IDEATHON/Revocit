@@ -1,7 +1,12 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const os = require("os");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const pdf = require("pdf-parse");
+
+const execFileAsync = promisify(execFile);
 
 const DEFAULT_PDF_DIRECTORIES = {
   en: path.resolve(__dirname, "../../../../../english files"),
@@ -43,16 +48,48 @@ async function extractPdfPages(filePath) {
   return pages;
 }
 
-async function loadPdfChunks(language) {
+async function extractOcrPages(filePath) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "lawyersathi-nepali-ocr-"));
+  try {
+    const sourceCopy = path.join(tempDir, "source.pdf");
+    await fs.copyFile(filePath, sourceCopy);
+    const parsed = await pdf(await fs.readFile(filePath));
+    const pages = [];
+    for (let page = 1; page <= parsed.numpages; page += 1) {
+      const imagePrefix = path.join(tempDir, `page-${page}`);
+      const imagePath = `${imagePrefix}.png`;
+      await execFileAsync("pdftoppm", ["-f", String(page), "-l", String(page), "-r", "120", "-singlefile", "-png", sourceCopy, imagePrefix], { maxBuffer: 1024 * 1024 * 10 });
+      const { stdout } = await execFileAsync("tesseract", [imagePath, "stdout", "-l", "nep", "--psm", "6"], { maxBuffer: 1024 * 1024 * 10 });
+      await fs.rm(imagePath, { force: true });
+      const text = normaliseText(stdout);
+      if (text) pages.push(text);
+    }
+    if (!pages.length) throw new Error("Nepali OCR produced no extractable text.");
+    return pages;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function listPdfFiles(language) {
   if (!DEFAULT_PDF_DIRECTORIES[language]) throw new Error(`Unsupported corpus language: ${language}`);
   const configuredDirectory = language === "ne" ? process.env.NEPALI_PDF_SOURCE_DIR : process.env.ENGLISH_PDF_SOURCE_DIR;
   const directory = path.resolve(configuredDirectory || DEFAULT_PDF_DIRECTORIES[language]);
   const entries = await fs.readdir(directory, { withFileTypes: true });
   const files = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")).map((entry) => entry.name).sort();
   if (!files.length) throw new Error(`No PDF files found in ${directory}`);
+  return { directory, files };
+}
+
+async function loadPdfChunks(language, selectedFiles) {
+  const { directory, files: availableFiles } = await listPdfFiles(language);
+  const files = selectedFiles || availableFiles;
   const chunks = [];
   for (const fileName of files) {
-    const pages = await extractPdfPages(path.join(directory, fileName));
+    const filePath = path.join(directory, fileName);
+    const pages = language === "ne" && process.env.NEPALI_OCR === "true"
+      ? await extractOcrPages(filePath)
+      : await extractPdfPages(filePath);
     pages.forEach((pageText, pageOffset) => chunkText(pageText).forEach((text, chunkOffset) => chunks.push({
       id: stableId(language, fileName, pageOffset + 1, chunkOffset), text,
       metadata: { title: path.basename(fileName, path.extname(fileName)), sourceFile: fileName, page: pageOffset + 1, chunk: chunkOffset + 1, language, category: "Nepal criminal law" }
@@ -61,4 +98,4 @@ async function loadPdfChunks(language) {
   return { directory, files, chunks };
 }
 
-module.exports = { loadPdfChunks };
+module.exports = { listPdfFiles, loadPdfChunks };
