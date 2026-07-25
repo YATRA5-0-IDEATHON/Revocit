@@ -1,0 +1,20 @@
+{
+  "name": "lawyersathi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lawyersathi full-stack legal assistant",
+  "main": "backend/src/server.js",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "dev": "node backend/src/server.js",
+    "seed": "node backend/src/scripts/seedDocuments.js"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^3.0.1",
+    "ad-bs-converter": "^0.5.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2"
+    ,"pg": "^8.12.0",
+    "weaviate-client": "^3.8.0"
+  }
+}

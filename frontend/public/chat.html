@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lawyersathi Chat Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+  <div class="chat-layout">
+    <aside class="sidebar">
+      <a class="logo" href="/">
+        <span>L</span>
+        <strong>Lawyersathi</strong>
+      </a>
+
+      <section class="mode-panel">
+        <h2 data-i18n="modeTitle">Consultation Mode</h2>
+        <label for="audience" data-i18n="audienceLabel">Audience</label>
+        <select id="audience">
+          <option value="citizen">Citizen</option>
+          <option value="lawfirm">Law Firm</option>
+          <option value="government">Government</option>
+        </select>
+        <button id="langToggle" class="lang-toggle" type="button">नेपाली</button>
+      </section>
+
+      <section class="tips">
+        <h3 data-i18n="tipsTitle">Suggested prompts</h3>
+        <button class="prompt-chip" data-prompt="What is the right process for reporting social violence and protecting evidence?">Social violence reporting process</button>
+        <button class="prompt-chip" data-prompt="How should a law firm verify a legal complaint draft before filing?">Law firm review checklist</button>
+        <button class="prompt-chip" data-prompt="What should government teams check before issuing legal action notice?">Government legal action checklist</button>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-header">
+        <div>
+          <h1 data-i18n="chatTitle">Legal Assistant Workspace</h1>
+          <p data-i18n="chatSub">Ask a legal question and receive source-grounded responses.</p>
+        </div>
+        <a class="back-link" href="/" data-i18n="backHome">Back to Home</a>
+      </header>
+
+      <section class="thread" id="thread">
+        <article class="message system">
+          <p data-i18n="systemMsg">Welcome. Ask your legal question to begin.</p>
+        </article>
+      </section>
+
+      <section class="composer">
+        <label class="sr-only" for="question">Question</label>
+        <textarea id="question" rows="3" placeholder="Type your legal question..."></textarea>
+        <button id="send" type="button" data-i18n="sendBtn">Ask Assistant</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="chat.js"></script>
+</body>
+</html>
