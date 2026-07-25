@@ -39,21 +39,41 @@ copy .env.example .env
 - VECTOR_PROVIDER as pinecone or weaviate
 - provider-specific keys (PINECONE_* or WEAVIATE_*)
 
-For the bundled English legal PDFs, Pinecone is required. Create a dense Pinecone
-index with dimension **1024** (the output size of `multilingual-e5-large`) and set:
+For the bundled legal PDFs, Pinecone is required. Create **two** dense Pinecone
+indexes, both with dimension **1024** (the output size of `multilingual-e5-large`):
+one for English and one for Nepali. Set:
 
 ```
 VECTOR_PROVIDER=pinecone
 PINECONE_API_KEY=...
-PINECONE_INDEX=...
+PINECONE_INDEX_english=...
+PINECONE_INDEX_nepali=...
 PINECONE_NAMESPACE=lawyersathi
 PINECONE_EMBEDDING_MODEL=multilingual-e5-large
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
 ```
 
-On startup the service reads every PDF in `C:\Users\user\Desktop\english files`,
-extracts every page, chunks it with overlap, and upserts it into that namespace.
-Use `POST /api/rag/reindex` after adding or replacing PDFs. Set `PDF_SOURCE_DIR`
-only when the PDFs live elsewhere.
+On startup the service separately reads PDFs in `C:\Users\user\Desktop\english files`
+and `C:\Users\user\Desktop\nepali files`, extracts every page, chunks each source
+in its original language, and upserts each corpus into its matching index. A Nepali
+question only queries the Nepali index; an English question only queries the English
+index. Use `POST /api/rag/reindex` after adding or replacing PDFs.
+
+The app queries the existing indexes on startup, so teammates do not need local PDF
+copies to chat. On a machine that does have the source folders, set
+`AUTO_REINDEX=true` (or call `POST /api/rag/reindex` with `{ "language": "en" }`
+or `{ "language": "ne" }`) to update an index.
+
+The chat answer is generated locally with Qwen through Ollama. Install Ollama,
+then download the model once on each laptop before starting the app:
+
+```bash
+ollama pull qwen3:4b
+```
+
+Nepali questions are detected automatically and Qwen answers in Nepali using only
+Nepali source passages. No query-time translation is used for retrieval.
 
 4. Start the app:
 

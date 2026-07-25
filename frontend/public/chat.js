@@ -107,7 +107,7 @@ async function queryAssistant(prompt) {
 function renderAssistantResult(result) {
   const nextSteps = (result.nextSteps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   const citations = (result.citations || [])
-    .map((item) => `<li><strong>${escapeHtml(item.title)}</strong> (${escapeHtml(item.category)})</li>`)
+    .map((item) => `<li><strong>${escapeHtml(item.title)}</strong>${item.page ? ` — ${state.lang === "ne" ? "पृष्ठ" : "page"} ${escapeHtml(item.page)}` : ""} (${escapeHtml(item.category)})</li>`)
     .join("");
 
   appendMessage(

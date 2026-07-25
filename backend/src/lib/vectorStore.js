@@ -1,12 +1,23 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
 const weaviate = require("weaviate-client");
 
-async function createVectorStore() {
+function valueFor(...names) {
+  for (const name of names) {
+    if (process.env[name]) return process.env[name];
+  }
+  return "";
+}
+
+async function createVectorStore({ language } = {}) {
   const provider = (process.env.VECTOR_PROVIDER || "pinecone").toLowerCase();
 
   if (provider === "pinecone") {
     const apiKey = process.env.PINECONE_API_KEY;
-    const indexName = process.env.PINECONE_INDEX;
+    const indexName = language === "ne"
+      ? valueFor("PINECONE_INDEX_nepali", "PINECONE_INDEX_NEPALI")
+      : language === "en"
+        ? valueFor("PINECONE_INDEX_english", "PINECONE_INDEX_ENGLISH")
+        : process.env.PINECONE_INDEX;
     if (!apiKey || !indexName) {
       return { provider: "none", ready: false, reason: "Pinecone credentials missing" };
     }
@@ -18,6 +29,8 @@ async function createVectorStore() {
       provider: "pinecone",
       ready: true,
       client,
+      language,
+      indexName,
       async upsert(vectors) {
         await index.upsert(vectors);
       },

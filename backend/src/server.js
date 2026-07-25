@@ -22,9 +22,11 @@ app.get("*", (req, res) => {
 async function ensureData() {
   const vectorState = await bootstrapVectorStore();
   console.log("Vector provider:", vectorState);
-  if (vectorState.ready) {
+  if (process.env.AUTO_REINDEX === "true") {
     const indexing = await indexDocuments();
     console.log("PDF index status:", indexing);
+  } else {
+    console.log("Using existing Pinecone indexes. Set AUTO_REINDEX=true only when the source PDF folders are available.");
   }
 }
 

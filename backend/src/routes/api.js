@@ -68,7 +68,9 @@ router.post("/rag/query", async (req, res) => {
 });
 
 router.post("/rag/reindex", async (req, res) => {
-  const result = await indexDocuments();
+  const language = req.body?.language;
+  if (language && !["en", "ne"].includes(language)) return res.status(400).json({ error: "language must be en or ne" });
+  const result = await indexDocuments({ language });
   res.json(result);
 });
 

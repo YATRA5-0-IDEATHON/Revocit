@@ -3,7 +3,10 @@ const fs = require("fs/promises");
 const path = require("path");
 const pdf = require("pdf-parse");
 
-const DEFAULT_PDF_DIRECTORY = path.resolve(__dirname, "../../../../../english files");
+const DEFAULT_PDF_DIRECTORIES = {
+  en: path.resolve(__dirname, "../../../../../english files"),
+  ne: path.resolve(__dirname, "../../../../../nepali files")
+};
 
 function normaliseText(value) {
   return String(value || "").replace(/\u0000/g, "").replace(/[ \t]+/g, " ").replace(/\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -26,8 +29,8 @@ function chunkText(text, size = 1400, overlap = 220) {
   return chunks;
 }
 
-function stableId(sourceFile, page, chunkIndex) {
-  return crypto.createHash("sha256").update(`${sourceFile}:${page}:${chunkIndex}`).digest("hex");
+function stableId(language, sourceFile, page, chunkIndex) {
+  return crypto.createHash("sha256").update(`${language}:${sourceFile}:${page}:${chunkIndex}`).digest("hex");
 }
 
 async function extractPdfPages(filePath) {
@@ -40,8 +43,10 @@ async function extractPdfPages(filePath) {
   return pages;
 }
 
-async function loadPdfChunks() {
-  const directory = path.resolve(process.env.PDF_SOURCE_DIR || DEFAULT_PDF_DIRECTORY);
+async function loadPdfChunks(language) {
+  if (!DEFAULT_PDF_DIRECTORIES[language]) throw new Error(`Unsupported corpus language: ${language}`);
+  const configuredDirectory = language === "ne" ? process.env.NEPALI_PDF_SOURCE_DIR : process.env.ENGLISH_PDF_SOURCE_DIR;
+  const directory = path.resolve(configuredDirectory || DEFAULT_PDF_DIRECTORIES[language]);
   const entries = await fs.readdir(directory, { withFileTypes: true });
   const files = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")).map((entry) => entry.name).sort();
   if (!files.length) throw new Error(`No PDF files found in ${directory}`);
@@ -49,8 +54,8 @@ async function loadPdfChunks() {
   for (const fileName of files) {
     const pages = await extractPdfPages(path.join(directory, fileName));
     pages.forEach((pageText, pageOffset) => chunkText(pageText).forEach((text, chunkOffset) => chunks.push({
-      id: stableId(fileName, pageOffset + 1, chunkOffset), text,
-      metadata: { title: path.basename(fileName, path.extname(fileName)), sourceFile: fileName, page: pageOffset + 1, chunk: chunkOffset + 1, category: "Nepal criminal law" }
+      id: stableId(language, fileName, pageOffset + 1, chunkOffset), text,
+      metadata: { title: path.basename(fileName, path.extname(fileName)), sourceFile: fileName, page: pageOffset + 1, chunk: chunkOffset + 1, language, category: "Nepal criminal law" }
     })));
   }
   return { directory, files, chunks };

@@ -41,11 +41,12 @@ module.exports = {
   toVector,
   cosineSimilarity,
   async embedPinecone(client, inputs, inputType) {
-    const response = await client.inference.embed({
-      model: process.env.PINECONE_EMBEDDING_MODEL || "multilingual-e5-large",
+    // Pinecone SDK v3 uses positional arguments: (model, inputs, parameters).
+    const response = await client.inference.embed(
+      process.env.PINECONE_EMBEDDING_MODEL || "multilingual-e5-large",
       inputs,
-      parameters: { inputType, truncate: "END" }
-    });
+      { inputType, truncate: "END" }
+    );
     return response.data.map((item) => item.values);
   }
 };
