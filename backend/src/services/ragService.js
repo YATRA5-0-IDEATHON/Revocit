@@ -7,6 +7,13 @@ const RATE_LIMIT_RETRY_MS = 61000;
 let vectorStores = {};
 let vectorStoreInfo = {};
 
+function finalAnswerContent(value) {
+  const text = String(value || "");
+  const closingTag = text.lastIndexOf("</think>");
+  if (closingTag >= 0) return text.slice(closingTag + "</think>".length).trim();
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 function detectLanguage(text) {
   return /[\u0900-\u097F]/.test(String(text || "")) ? "ne" : "en";
 }
@@ -68,7 +75,7 @@ async function generateAnswer({ query, context, language, audience }) {
   const languageRule = language === "ne"
     ? "Respond only in clear Nepali (Devanagari). The supplied legal passages are Nepali; preserve their legal meaning and terminology."
     : "Respond only in clear English. The supplied legal passages are English; preserve their legal meaning and terminology.";
-  const system = `You are a Nepal legal-information assistant for a ${audience} audience. ${languageRule} Use only the supplied source passages and preserve their legal meaning, legal terms, section numbers, facts, and procedures. If the passages do not answer the question, say that clearly. Give a concise direct answer. Output plain text only: do not use Markdown, asterisks, headings, source lists, or statements about being based on supplied passages, translations, external knowledge, or your answering process.`;
+  const system = `You are a Nepal legal-information assistant for a ${audience} audience. ${languageRule} Use only the supplied source passages and preserve their legal meaning, legal terms, section numbers, facts, and procedures. If the passages do not answer the question, say that clearly. Give a complete, well-organized answer that includes every relevant condition, exception, definition, procedure, and penalty found in the passages. Do not summarize away legally relevant details. Output plain text only: do not use Markdown, asterisks, headings, source lists, or statements about being based on supplied passages, translations, external knowledge, or your answering process.`;
   let answer = "";
   for (let attempt = 0; attempt < 2 && !answer; attempt += 1) {
     const response = await fetch(`${baseUrl}/api/chat`, {
@@ -80,7 +87,19 @@ async function generateAnswer({ query, context, language, audience }) {
     });
     if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
     const result = await response.json();
-    answer = String(result.message?.content || "").replace(/\*+/g, "").trim();
+    answer = finalAnswerContent(result.message?.content).replace(/\*+/g, "").trim();
+  }
+  if (answer && language === "ne" && /[A-Za-z]/.test(answer)) {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0.1 }, messages: [
+        { role: "system", content: "तपाईं नेपालका कानुनी जानकारी सहायक हुनुहुन्छ। तलको उत्तरलाई तथ्य, कानुनी शब्द, दफा, सर्त, अपवाद, सजाय र अर्थ नबदलिकन देवनागरी नेपालीमा मात्र पूर्ण रूपमा पुनर्लेखन गर्नुहोस्। कुनै विवरण नछोड्नुहोस्, संक्षेप वा सारांश नबनाउनुहोस्। अङ्ग्रेजी अक्षर, अङ्ग्रेजी कोष्ठक, विश्लेषण, वा व्याख्या नलेख्नुहोस्। उत्तर मात्र लेख्नुहोस्।" },
+        { role: "user", content: answer }
+      ] })
+    });
+    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+    const rewritten = finalAnswerContent((await response.json()).message?.content).replace(/\*+/g, "").trim();
+    if (rewritten) answer = rewritten;
   }
   if (!answer) throw new Error("Ollama returned an empty response");
   return answer;
