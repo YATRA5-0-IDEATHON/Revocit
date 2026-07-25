@@ -43,23 +43,30 @@ function applyLanguage() {
   });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.getAttribute("data-i18n-placeholder")); });
   document.documentElement.lang = state.lang === "ne" ? "ne" : "en";
-  document.getElementById("langToggle").textContent = state.lang === "en" ? "नेपाली" : "English";
+  document.querySelectorAll("[data-lang]").forEach((button) => button.classList.toggle("active", button.dataset.lang === state.lang));
 }
 
 function renderUsage() {
   const node = document.getElementById("usageStatus");
   if (!node || !state.user) return;
-  node.textContent = state.user.plan === "trial"
-    ? `${state.user.questionsRemaining} ${state.lang === "ne" ? "निःशुल्क प्रश्न बाँकी" : "free questions remaining"}`
-    : `${state.user.plan === "professional" ? "Professional" : "Standard"} ${state.lang === "ne" ? "सदस्यता" : "subscription"}`;
+  node.textContent = `${state.user.questionsRemaining} ${state.lang === "ne" ? "प्रश्न बाँकी" : "questions remaining"} · ${state.user.plan === "professional" ? "Professional" : state.user.plan === "standard" ? "Standard" : "Free trial"}`;
 }
 
 async function loadSession() {
-  const response = await fetch("/api/auth/me", { credentials: "same-origin" });
-  const data = await response.json();
-  if (!data.user) { window.location.replace("/login.html"); return; }
-  state.user = data.user;
-  renderUsage();
+  try {
+    const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+    const data = await response.json();
+    if (data.user) {
+      state.user = data.user;
+      renderUsage();
+      return;
+    }
+  } catch { /* Show the in-workspace sign-in prompt below. */ }
+
+  document.getElementById("usageStatus").textContent = state.lang === "ne" ? "च्याट सुरु गर्न लग इन गर्नुहोस्" : "Log in to start chatting";
+  document.getElementById("question").disabled = true;
+  document.getElementById("send").disabled = true;
+  appendMessage("assistant", `<p>${state.lang === "ne" ? "कानुनी सहायक प्रयोग गर्न आफ्नो खातामा लग इन गर्नुहोस्।" : "Please log in to your account to use the legal assistant."} <a href="/login.html">${state.lang === "ne" ? "लग इन गर्नुहोस्" : "Log in"}</a> ${state.lang === "ne" ? "वा" : "or"} <a href="/signup.html">${state.lang === "ne" ? "खाता बनाउनुहोस्" : "create an account"}</a>.</p>`);
 }
 
 function escapeHtml(text) {
@@ -75,7 +82,7 @@ function appendMessage(role, html) {
   article.className = `message ${role}`;
   article.innerHTML = html;
   thread.appendChild(article);
-  thread.scrollTop = thread.scrollHeight;
+  article.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 async function queryAssistant(prompt) {
@@ -115,6 +122,7 @@ function renderAssistantResult(result) {
 }
 
 async function submitQuestion(prompt) {
+  if (!state.user) return;
   const trimmed = String(prompt || "").trim();
   if (!trimmed) {
     return;
@@ -143,11 +151,11 @@ async function submitQuestion(prompt) {
   }
 }
 
-document.getElementById("langToggle").addEventListener("click", () => {
-  state.lang = state.lang === "en" ? "ne" : "en";
+document.querySelectorAll("[data-lang]").forEach((button) => button.addEventListener("click", () => {
+  state.lang = button.dataset.lang;
   applyLanguage();
   renderUsage();
-});
+}));
 
 document.getElementById("send").addEventListener("click", () => {
   const input = document.getElementById("question");

@@ -18,7 +18,9 @@ function saveUsers(users) {
 function publicUser(user) {
   const questionsUsed = Number(user.questionsUsed || 0);
   const plan = user.plan || "trial";
-  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, plan, questionsUsed, questionsRemaining: plan === "trial" ? Math.max(0, 5 - questionsUsed) : null };
+  const limits = { trial: 5, standard: 500, professional: 1000 };
+  const questionLimit = limits[plan] || 5;
+  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, plan, questionsUsed, questionLimit, questionsRemaining: Math.max(0, questionLimit - questionsUsed) };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -68,6 +70,7 @@ function activatePlan(userId, plan) {
   const user = users.find((item) => item.id === userId);
   if (!user) return null;
   user.plan = plan;
+  user.questionsUsed = 0;
   user.subscriptionStartedAt = new Date().toISOString();
   saveUsers(users);
   return user;
@@ -77,7 +80,9 @@ function recordQuestion(userId) {
   const users = readUsers();
   const user = users.find((item) => item.id === userId);
   if (!user) return { allowed: false, reason: "not_found" };
-  if ((user.plan || "trial") === "trial" && Number(user.questionsUsed || 0) >= 5) return { allowed: false, reason: "subscription_required", user };
+  const limits = { trial: 5, standard: 500, professional: 1000 };
+  const limit = limits[user.plan || "trial"] || 5;
+  if (Number(user.questionsUsed || 0) >= limit) return { allowed: false, reason: "subscription_required", user };
   user.questionsUsed = Number(user.questionsUsed || 0) + 1;
   saveUsers(users);
   return { allowed: true, user };
