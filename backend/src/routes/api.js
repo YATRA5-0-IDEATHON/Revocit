@@ -1,8 +1,42 @@
 const express = require("express");
 const { queryRag, indexDocuments } = require("../services/ragService");
 const { formatDocument, convertDate, buildCaseDraft } = require("../services/legalToolsService");
+const { createUser, authenticate, getSessionUser, signSession, publicUser, sessionAgeMs } = require("../services/authService");
 
 const router = express.Router();
+
+function getCookie(req, name) {
+  const entry = String(req.headers.cookie || "").split(";").map((item) => item.trim()).find((item) => item.startsWith(`${name}=`));
+  return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;
+}
+
+function setSession(res, user) {
+  res.cookie("lawyersathi_session", signSession(user), { httpOnly: true, sameSite: "lax", path: "/", maxAge: sessionAgeMs, secure: process.env.NODE_ENV === "production" });
+}
+
+router.get("/auth/me", (req, res) => {
+  const user = getSessionUser(getCookie(req, "lawyersathi_session"));
+  res.json({ user: user ? publicUser(user) : null });
+});
+
+router.post("/auth/signup", (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim();
+  const password = String(req.body?.password || "");
+  if (name.length < 2 || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return res.status(400).json({ error: "Enter a name, a valid email, and a password of at least 8 characters." });
+  try { const user = createUser({ name, email, password }); setSession(res, user); res.status(201).json({ user: publicUser(user) }); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+router.post("/auth/login", (req, res) => {
+  const email = String(req.body?.email || "").trim();
+  const password = String(req.body?.password || "");
+  const user = authenticate({ email, password });
+  if (!user) return res.status(401).json({ error: "Email or password is incorrect." });
+  setSession(res, user); res.json({ user: publicUser(user) });
+});
+
+router.post("/auth/logout", (req, res) => { res.clearCookie("lawyersathi_session", { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" }); res.status(204).end(); });
 
 router.get("/health", (req, res) => {
   res.json({ status: "ok", service: "lawyersathi-api" });

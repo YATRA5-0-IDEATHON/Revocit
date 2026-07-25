@@ -17,28 +17,30 @@
         <strong>Lawyersathi</strong>
       </a>
 
+      <p class="workspace-label">LAWYERSATHI / LEGAL AI</p>
       <section class="mode-panel">
         <h2 data-i18n="modeTitle">Consultation Mode</h2>
         <label for="audience" data-i18n="audienceLabel">Audience</label>
         <select id="audience">
-          <option value="citizen">Citizen</option>
-          <option value="lawfirm">Law Firm</option>
-          <option value="government">Government</option>
+          <option value="citizen" data-i18n="citizen">Citizen</option>
+          <option value="lawfirm" data-i18n="lawFirm">Law Firm</option>
+          <option value="government" data-i18n="government">Government</option>
         </select>
         <button id="langToggle" class="lang-toggle" type="button">नेपाली</button>
       </section>
 
       <section class="tips">
         <h3 data-i18n="tipsTitle">Suggested prompts</h3>
-        <button class="prompt-chip" data-prompt="What is the right process for reporting social violence and protecting evidence?">Social violence reporting process</button>
-        <button class="prompt-chip" data-prompt="How should a law firm verify a legal complaint draft before filing?">Law firm review checklist</button>
-        <button class="prompt-chip" data-prompt="What should government teams check before issuing legal action notice?">Government legal action checklist</button>
+        <button class="prompt-chip" data-prompt="What is the right process for reporting social violence and protecting evidence?" data-i18n="promptOne">Social violence reporting process</button>
+        <button class="prompt-chip" data-prompt="How should a law firm verify a legal complaint draft before filing?" data-i18n="promptTwo">Law firm review checklist</button>
+        <button class="prompt-chip" data-prompt="What should government teams check before issuing legal action notice?" data-i18n="promptThree">Government legal action checklist</button>
       </section>
     </aside>
 
     <main class="workspace">
       <header class="workspace-header">
         <div>
+          <p class="status-pill"><span></span><span data-i18n="statusReady">Workspace ready</span></p>
           <h1 data-i18n="chatTitle">Legal Assistant Workspace</h1>
           <p data-i18n="chatSub">Ask a legal question and receive source-grounded responses.</p>
         </div>
@@ -53,7 +55,7 @@
 
       <section class="composer">
         <label class="sr-only" for="question">Question</label>
-        <textarea id="question" rows="3" placeholder="Type your legal question..."></textarea>
+        <textarea id="question" rows="3" placeholder="Type your legal question..." data-i18n-placeholder="placeholder"></textarea>
         <button id="send" type="button" data-i18n="sendBtn">Ask Assistant</button>
       </section>
     </main>

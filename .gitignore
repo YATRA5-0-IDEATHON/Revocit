@@ -1,3 +1,4 @@
 node_modules/
 .env
+backend/src/data/users.json
 npm-debug.log*

@@ -14,6 +14,7 @@ const i18n = {
     sendBtn: "Ask Assistant",
     thinking: "Preparing response...",
     sources: "Sources"
+    ,citizen: "Citizen", lawFirm: "Law Firm", government: "Government", promptOne: "Social violence reporting process", promptTwo: "Law firm review checklist", promptThree: "Government legal action checklist", statusReady: "Workspace ready", placeholder: "Type your legal question..."
   },
   ne: {
     modeTitle: "परामर्श मोड",
@@ -25,7 +26,8 @@ const i18n = {
     systemMsg: "स्वागत छ। सुरु गर्न कानुनी प्रश्न सोध्नुहोस्।",
     sendBtn: "सहायकलाई सोध्नुहोस्",
     thinking: "उत्तर तयार हुँदैछ...",
-    sources: "स्रोतहरू"
+    sources: "स्रोतहरू",
+    citizen: "नागरिक", lawFirm: "कानुनी संस्था", government: "सरकार", promptOne: "सामाजिक हिंसा उजुरी प्रक्रिया", promptTwo: "कानुनी संस्था समीक्षा सूची", promptThree: "सरकारी कानुनी कार्य सूची", statusReady: "कार्यस्थान तयार छ", placeholder: "आफ्नो कानुनी प्रश्न लेख्नुहोस्..."
   }
 };
 
@@ -38,6 +40,7 @@ function applyLanguage() {
     const key = node.getAttribute("data-i18n");
     node.textContent = t(key);
   });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.getAttribute("data-i18n-placeholder")); });
   document.documentElement.lang = state.lang === "ne" ? "ne" : "en";
   document.getElementById("langToggle").textContent = state.lang === "en" ? "नेपाली" : "English";
 }
