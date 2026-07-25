@@ -16,6 +16,42 @@ async function refreshNavigation() {
   } catch { userLinks.forEach((node) => { node.hidden = true; }); }
 }
 
+function ensureNavigation() {
+  const nepali = localStorage.getItem("lawyersathi_lang") === "ne";
+  const labels = nepali
+    ? { services: "हाम्रा सेवाहरू", about: "हाम्रो बारेमा", subscription: "सदस्यता", chat: "च्याट खोल्नुहोस्", profile: "प्रोफाइल", signup: "सुरु गर्नुहोस्", logout: "लग आउट" }
+    : { services: "Our services", about: "About us", subscription: "Subscription", chat: "Open Chat", profile: "Profile", signup: "Get started", logout: "Log out" };
+  document.querySelectorAll(".nav-links").forEach((links) => {
+    const addLink = (href, label, className = "") => {
+      let link = Array.from(links.querySelectorAll("a[href]")).find((item) => {
+        try { return new URL(item.href, window.location.origin).pathname === href; }
+        catch { return false; }
+      });
+      if (!link) { link = document.createElement("a"); link.href = href; links.appendChild(link); }
+      if (className) link.className = className;
+      link.textContent = label;
+      return link;
+    };
+    const services = addLink("/services.html", labels.services);
+    const about = addLink("/about.html", labels.about);
+    const subscription = addLink("/subscription.html", labels.subscription);
+    const chat = addLink("/chat.html", labels.chat, "btn btn-chat");
+    const profile = addLink("/profile.html", labels.profile); profile.dataset.user = "";
+    const signup = addLink("/signup.html", labels.signup, "btn btn-nav"); signup.dataset.guest = "";
+    let logout = links.querySelector("[data-logout]");
+    if (!logout) {
+      logout = document.createElement("button"); logout.type = "button"; logout.className = "login-link nav-button"; logout.dataset.user = ""; logout.dataset.logout = ""; links.appendChild(logout);
+      logout.addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }); window.location.assign("/"); });
+    }
+    logout.textContent = labels.logout;
+    // Re-append in one fixed order on every page. The language button is added
+    // afterward by localize.js, so it remains the final item consistently.
+    [services, about, subscription, profile, chat, signup, logout].forEach((node) => links.appendChild(node));
+    const languageToggle = links.querySelector("#langToggle, #sharedLangToggle");
+    if (languageToggle) links.appendChild(languageToggle);
+  });
+}
+
 async function submitAuthForm(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -73,4 +109,25 @@ document.querySelectorAll(".navbar-inner").forEach((navbar) => {
   });
   navbar.appendChild(toggle);
 });
+ensureNavigation();
 refreshNavigation();
+
+// A browser may restore a prior page from its back/forward cache instead of
+// running its scripts again. If that cached DOM was rendered in the other
+// language, reload it once using the single persisted language value.
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+  const expectedLanguage = localStorage.getItem("lawyersathi_lang") === "ne" ? "ne" : "en";
+  if (document.documentElement.lang !== expectedLanguage) window.location.reload();
+});
+
+// Content pages share this file; load the persisted site-language controller
+// whenever the page does not already use the homepage language controller.
+if (!document.getElementById("langToggle")) {
+  const languageScript = document.createElement("script");
+  // Preserve a deterministic execution order for pages that build navigation
+  // dynamically. localize.js re-applies once it is loaded.
+  languageScript.async = false;
+  languageScript.src = "/localize.js?v=2";
+  document.head.appendChild(languageScript);
+}

@@ -1,6 +1,7 @@
 const express = require("express");
 const { queryRag, indexDocuments } = require("../services/ragService");
 const { formatDocument, convertDate, buildCaseDraft } = require("../services/legalToolsService");
+const { prepareComplaintDraft } = require("../services/draftService");
 const { createUser, authenticate, getSessionUser, signSession, publicUser, activatePlan, recordQuestion, sessionAgeMs } = require("../services/authService");
 
 const router = express.Router();
@@ -74,12 +75,18 @@ router.post("/rag/reindex", async (req, res) => {
   res.json(result);
 });
 
-router.post("/draft-case", (req, res) => {
-  const claimant = String(req.body?.claimant || "Claimant").trim();
-  const respondent = String(req.body?.respondent || "Respondent").trim();
-  const summary = String(req.body?.summary || "No summary provided").trim();
-  const lang = String(req.body?.lang || "en").trim();
-  res.json(buildCaseDraft({ claimant, respondent, summary, lang }));
+router.post("/draft-case", async (req, res) => {
+  const user = getSessionUser(getCookie(req, "lawyersathi_session"));
+  if (!user) return res.status(401).json({ error: "कानुनी मस्यौदा तयार गर्न लग इन गर्नुहोस्।", code: "login_required" });
+  const incidentDetails = String(req.body?.incidentDetails || "").trim();
+  if (incidentDetails.length < 12) return res.status(400).json({ error: "घटनाको पर्याप्त विवरण लेख्नुहोस्।" });
+  try {
+    const result = await prepareComplaintDraft(req.body || {});
+    res.json(result);
+  } catch (error) {
+    console.error("Draft preparation failed:", error.message);
+    res.status(503).json({ error: "मस्यौदा तयार हुन सकेन। Ollama र नेपाली कानुनी इन्डेक्स जाँचेर फेरि प्रयास गर्नुहोस्।" });
+  }
 });
 
 router.post("/date/convert", (req, res) => {

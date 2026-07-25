@@ -11,7 +11,9 @@ const port = Number(process.env.PORT || 3000);
 app.use(express.json({ limit: "1mb" }));
 
 const publicDir = path.resolve(__dirname, "../../frontend/public");
-app.use(express.static(publicDir));
+// Always revalidate frontend assets during development so the active language
+// controller cannot be an older browser-cached copy after a deployment.
+app.use(express.static(publicDir, { setHeaders: (res) => res.setHeader("Cache-Control", "no-cache") }));
 
 app.use("/api", apiRoutes);
 

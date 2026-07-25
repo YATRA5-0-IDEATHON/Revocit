@@ -90,6 +90,14 @@ function nativeMessage(language, english, nepali) {
   return language === "ne" ? nepali : english;
 }
 
+async function retrieveLegalSources({ query, language = detectLanguage(query), topK = 4 }) {
+  const store = vectorStores[language];
+  if (!store?.ready || store.provider !== "pinecone") throw new Error(`${language} Pinecone index is not configured`);
+  const [vector] = await embedPinecone(store.client, [query], "query");
+  const matches = await store.query(vector, topK);
+  return { language, store, matches };
+}
+
 async function queryRag({ query, audience = "citizen", topK = 4 }) {
   const language = detectLanguage(query);
   const store = vectorStores[language];
@@ -97,8 +105,7 @@ async function queryRag({ query, audience = "citizen", topK = 4 }) {
     return { answer: nativeMessage(language, "The English PDF index is not configured.", "नेपाली PDF इन्डेक्स तयार छैन।"), nextSteps: [], citations: [], meta: { language, vectorReady: false, retrieval: "none", index: vectorStoreInfo[language] || null } };
   }
   try {
-    const [vector] = await embedPinecone(store.client, [query], "query");
-    const matches = await store.query(vector, topK);
+    const { matches } = await retrieveLegalSources({ query, language, topK });
     if (!matches.length) return { answer: nativeMessage(language, "No relevant passage was found in the English PDFs.", "नेपाली PDF मा यस प्रश्नसँग सम्बन्धित अंश भेटिएन।"), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "vector", indexName: store.indexName } };
     const context = matches.map((match) => match.metadata?.text).filter(Boolean).join("\n\n---\n\n");
     const answer = await generateAnswer({ query, context, language, audience });
@@ -114,4 +121,4 @@ async function queryRag({ query, audience = "citizen", topK = 4 }) {
   }
 }
 
-module.exports = { bootstrapVectorStore, indexDocuments, queryRag, detectLanguage };
+module.exports = { bootstrapVectorStore, indexDocuments, queryRag, detectLanguage, retrieveLegalSources };

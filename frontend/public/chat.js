@@ -1,5 +1,6 @@
+const savedLanguage = localStorage.getItem("lawyersathi_lang");
 const state = {
-  lang: "en",
+  lang: savedLanguage === "ne" ? "ne" : "en",
   user: null
 };
 
@@ -32,11 +33,24 @@ const i18n = {
   }
 };
 
+function decodeLegacyText(value) {
+  if (typeof value !== "string" || !/[\u00c2\u00c3\u00e0\u00e2]/.test(value)) return value;
+  try { return decodeURIComponent(escape(value)); } catch { return value; }
+}
+
+Object.values(i18n).forEach((bundle) => Object.keys(bundle).forEach((key) => {
+  bundle[key] = decodeLegacyText(bundle[key]);
+}));
+
 function t(key) {
-  return i18n[state.lang][key] || key;
+  return (i18n[state.lang] || i18n.en)[key] || key;
 }
 
 function applyLanguage() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  textNodes.forEach((node) => { node.nodeValue = decodeLegacyText(node.nodeValue); });
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     const key = node.getAttribute("data-i18n");
     node.textContent = t(key);
@@ -156,6 +170,7 @@ async function submitQuestion(prompt) {
 
 document.querySelectorAll("[data-lang]").forEach((button) => button.addEventListener("click", () => {
   state.lang = button.dataset.lang;
+  localStorage.setItem("lawyersathi_lang", state.lang);
   applyLanguage();
   renderUsage();
 }));

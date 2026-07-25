@@ -90,6 +90,7 @@ http://localhost:3000
 - POST /api/rag/query
 - POST /api/rag/reindex
 - POST /api/draft-case
+- POST /api/draft-case
 - POST /api/date/convert
 - POST /api/format-document
 - GET /api/health
@@ -99,6 +100,7 @@ http://localhost:3000
 - RAG legal assistant with citations
 - Bilingual English/Nepali interface and responses
 - Legal search and context retrieval
+- Guided Nepali जाहेरी दरखास्त preparation with native-law citations and review safeguards
 - Case draft generation workflow
 - AD/BS date conversion utility
 - Legal text formatting helper
