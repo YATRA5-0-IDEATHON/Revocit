@@ -1,7 +1,7 @@
 const express = require("express");
 const { queryRag, indexDocuments } = require("../services/ragService");
 const { formatDocument, convertDate, buildCaseDraft } = require("../services/legalToolsService");
-const { prepareComplaintDraft } = require("../services/draftService");
+const { collectDraftIntake, prepareComplaintDraft } = require("../services/draftService");
 const { createUser, authenticate, getSessionUser, signSession, publicUser, activatePlan, recordQuestion, sessionAgeMs } = require("../services/authService");
 
 const router = express.Router();
@@ -73,6 +73,19 @@ router.post("/rag/reindex", async (req, res) => {
   if (language && !["en", "ne"].includes(language)) return res.status(400).json({ error: "language must be en or ne" });
   const result = await indexDocuments({ language });
   res.json(result);
+});
+
+router.post("/draft/intake", async (req, res) => {
+  const user = getSessionUser(getCookie(req, "lawyersathi_session"));
+  if (!user) return res.status(401).json({ error: "कानुनी मस्यौदा तयार गर्न लग इन गर्नुहोस्।", code: "login_required" });
+  const message = String(req.body?.message || "").trim();
+  if (message.length < 3) return res.status(400).json({ error: "मस्यौदाका लागि केही विवरण लेख्नुहोस्।" });
+  try {
+    res.json(await collectDraftIntake({ message, draft: req.body?.draft || {} }));
+  } catch (error) {
+    console.error("Draft intake failed:", error.message);
+    res.status(503).json({ error: "मस्यौदाका विवरण पढ्न सकिएन। Ollama चलिरहेको छ कि जाँचेर फेरि प्रयास गर्नुहोस्।" });
+  }
 });
 
 router.post("/draft-case", async (req, res) => {

@@ -28,10 +28,13 @@
     .message.system { color:#bdbdbd; background:transparent; border:0; }
     .message.user { align-self:flex-end; background:#2c2c2c; border-radius:25px; }
     .citations { border-color:#3b3b3b; color:#b8b8b8; }.citations strong{color:#e5e5e5;}
-    .composer { width:min(840px,100%); margin:auto; grid-template-columns:1fr auto; border:1px solid #424242; border-radius:28px; background:#242424; box-shadow:none; }
+    .composer { width:min(840px,100%); margin:auto auto 30px; grid-template-columns:1fr auto auto; border:1px solid #424242; border-radius:28px; background:#242424; box-shadow:none; }
     .composer textarea { min-height:54px; color:#f4f4f4; background:transparent; }.composer textarea::placeholder{color:#9d9d9d}
     .composer button { width:42px; min-height:42px; padding:0; border-radius:50%; color:#111; background:#f5f5f5; font-size:0; box-shadow:none; }.composer button:after{content:'↑';font-size:1.2rem;font-weight:800}
-    .composer:before { content:'Lawyersathi can make mistakes. Check important legal information.'; position:absolute; bottom:74px; left:50%; transform:translateX(-50%); width:max-content; max-width:90vw; color:#858585; font-size:.67rem; }
+    .composer .draft-mode { width:auto; min-height:36px; padding:0 13px; border:1px solid #686868; border-radius:18px; color:#efefef; background:#303030; font-size:.75rem; box-shadow:none; }
+    .composer .draft-mode:after { content:none; }
+    .composer .draft-mode.active { color:#171717; background:#e6c77d; border-color:#e6c77d; }
+    .composer:before { content:'Lawyersathi can make mistakes. Check important legal information.'; position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); width:max-content; max-width:90vw; color:#858585; font-size:.67rem; }
     .language-selector button.active { color:#111; background:#fff; }
     @media (max-width:850px){.chat-layout{grid-template-columns:1fr}.workspace{padding:12px}.thread{padding:20px 5%}.sidebar{display:none}.composer:before{display:none}}
   </style>
@@ -45,7 +48,7 @@
       </a>
 
       <p class="workspace-label">LAWYERSATHI / LEGAL AI</p>
-      <a class="prompt-chip" href="/draft.html" style="text-decoration:none">जाहेरी दरखास्त तयार गर्नुहोस्</a>
+      <a class="prompt-chip" href="/chat.html?draft=1" style="text-decoration:none">जाहेरी दरखास्त तयार गर्नुहोस्</a>
       <section class="mode-panel">
         <h2 data-i18n="modeTitle">Consultation Mode</h2>
         <label for="audience" data-i18n="audienceLabel">Audience</label>
@@ -85,6 +88,7 @@
       <section class="composer">
         <label class="sr-only" for="question">Question</label>
         <textarea id="question" rows="3" placeholder="Type your legal question..." data-i18n-placeholder="placeholder"></textarea>
+        <button id="draftMode" class="draft-mode" type="button" aria-pressed="false">Draft</button>
         <button id="send" type="button" data-i18n="sendBtn">Ask Assistant</button>
       </section>
     </main>

@@ -1,0 +1,2 @@
+en RAG query failed: Request failed to reach Pinecone. This can occur for reasons such as network problems that prevent the request from being completed, or a Pinecone API outage. Check your network connection, and visit https://status.pinecone.io/ to see whether any outages are ongoing.
+en RAG query failed: Request failed to reach Pinecone. This can occur for reasons such as network problems that prevent the request from being completed, or a Pinecone API outage. Check your network connection, and visit https://status.pinecone.io/ to see whether any outages are ongoing.

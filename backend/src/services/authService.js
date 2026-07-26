@@ -18,9 +18,7 @@ function saveUsers(users) {
 function publicUser(user) {
   const questionsUsed = Number(user.questionsUsed || 0);
   const plan = user.plan || "trial";
-  const limits = { trial: 5, standard: 500, professional: 1000 };
-  const questionLimit = limits[plan] || 5;
-  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, plan, questionsUsed, questionLimit, questionsRemaining: Math.max(0, questionLimit - questionsUsed) };
+  return { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, plan, questionsUsed, questionLimit: null, questionsRemaining: null, unlimitedQuestions: true };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -80,9 +78,6 @@ function recordQuestion(userId) {
   const users = readUsers();
   const user = users.find((item) => item.id === userId);
   if (!user) return { allowed: false, reason: "not_found" };
-  const limits = { trial: 5, standard: 500, professional: 1000 };
-  const limit = limits[user.plan || "trial"] || 5;
-  if (Number(user.questionsUsed || 0) >= limit) return { allowed: false, reason: "subscription_required", user };
   user.questionsUsed = Number(user.questionsUsed || 0) + 1;
   saveUsers(users);
   return { allowed: true, user };

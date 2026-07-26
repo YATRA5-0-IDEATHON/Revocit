@@ -105,8 +105,55 @@ async function generateAnswer({ query, context, language, audience }) {
   return answer;
 }
 
+async function decideRetrieval({ query, language }) {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
+  const model = process.env.OLLAMA_MODEL || "qwen3:4b";
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, stream: false, think: false, format: "json", options: { temperature: 0, num_predict: 40 }, messages: [
+      { role: "system", content: "Classify whether a Nepal legal-document search is needed before answering. Use RAG for requests about Nepal law, legal rights, procedures, offences, penalties, sections, filing, courts, or when an answer should be grounded in legal sources. Do not use RAG for greetings, writing help, casual conversation, or questions answerable without legal sources. Return JSON only: {\"useRag\":true} or {\"useRag\":false}." },
+      { role: "user", content: `Language: ${language}\nQuestion: ${query}` }
+    ] })
+  });
+  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+  try {
+    return Boolean(JSON.parse(finalAnswerContent((await response.json()).message?.content)).useRag);
+  } catch {
+    // If routing output is malformed, legal retrieval is the safer default.
+    return true;
+  }
+}
+
+async function generateDirectAnswer({ query, language, audience, retrievalUnavailable = false }) {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
+  const model = process.env.OLLAMA_MODEL || "qwen3:4b";
+  const languageRule = language === "ne" ? "Respond only in clear Nepali (Devanagari)." : "Respond only in clear English.";
+  const sourceRule = retrievalUnavailable
+    ? "The legal-source search is currently unavailable. Be helpful, but do not invent Nepal legal sections, citations, procedures, or legal facts. Clearly say when a lawyer or official source should verify a legal point."
+    : "Answer directly and accurately. Do not invent legal citations, sections, or facts; advise checking an official source or lawyer for legal matters that require verification.";
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0.2 }, messages: [
+      { role: "system", content: `You are a helpful Nepal legal-information assistant for a ${audience} audience. ${languageRule} ${sourceRule} Output plain text only.` },
+      { role: "user", content: query }
+    ] })
+  });
+  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+  const answer = finalAnswerContent((await response.json()).message?.content).replace(/\*+/g, "").trim();
+  if (!answer) throw new Error("Ollama returned an empty response");
+  return answer;
+}
+
 function nativeMessage(language, english, nepali) {
   return language === "ne" ? nepali : english;
+}
+
+function retrievalUnavailableNotice(language) {
+  return nativeMessage(
+    language,
+    "Pinecone is currently unavailable. The following is a direct answer from Qwen and has not been verified against the legal PDF sources.",
+    "Pinecone हाल उपलब्ध छैन। तलको उत्तर Qwen बाट आएको प्रत्यक्ष उत्तर हो र कानुनी PDF स्रोतसँग प्रमाणित गरिएको छैन।"
+  );
 }
 
 async function retrieveLegalSources({ query, language = detectLanguage(query), topK = 4 }) {
@@ -120,8 +167,28 @@ async function retrieveLegalSources({ query, language = detectLanguage(query), t
 async function queryRag({ query, audience = "citizen", topK = 4 }) {
   const language = detectLanguage(query);
   const store = vectorStores[language];
+  let useRag = true;
+  try { useRag = await decideRetrieval({ query, language }); }
+  catch (error) { console.error("Qwen routing failed:", error.message); }
+
+  if (!useRag) {
+    try {
+      const answer = await generateDirectAnswer({ query, language, audience });
+      return { answer, nextSteps: [], citations: [], meta: { language, model: process.env.OLLAMA_MODEL || "qwen3:4b", retrieval: "none", routedBy: "qwen" } };
+    } catch (error) {
+      console.error("Direct Qwen answer failed:", error.message);
+      return { answer: nativeMessage(language, "Could not generate an answer. Please check that Ollama is running and try again.", "उत्तर तयार हुन सकेन। Ollama चलिरहेको छ कि जाँचेर फेरि प्रयास गर्नुहोस्।"), nextSteps: [], citations: [], meta: { language, retrieval: "error", routedBy: "qwen" } };
+    }
+  }
+
   if (!store?.ready || store.provider !== "pinecone") {
-    return { answer: nativeMessage(language, "The English PDF index is not configured.", "नेपाली PDF इन्डेक्स तयार छैन।"), nextSteps: [], citations: [], meta: { language, vectorReady: false, retrieval: "none", index: vectorStoreInfo[language] || null } };
+    try {
+      const answer = await generateDirectAnswer({ query, language, audience, retrievalUnavailable: true });
+      return { answer, notice: retrievalUnavailableNotice(language), nextSteps: [], citations: [], meta: { language, vectorReady: false, retrieval: "unavailable", routedBy: "qwen", index: vectorStoreInfo[language] || null } };
+    } catch (error) {
+      console.error("Fallback Qwen answer failed:", error.message);
+      return { answer: nativeMessage(language, "Could not generate an answer. Please check that Ollama is running and try again.", "उत्तर तयार हुन सकेन। Ollama चलिरहेको छ कि जाँचेर फेरि प्रयास गर्नुहोस्।"), nextSteps: [], citations: [], meta: { language, vectorReady: false, retrieval: "error" } };
+    }
   }
   try {
     const { matches } = await retrieveLegalSources({ query, language, topK });
@@ -136,8 +203,14 @@ async function queryRag({ query, audience = "citizen", topK = 4 }) {
     };
   } catch (error) {
     console.error(`${language} RAG query failed:`, error.message);
-    return { answer: nativeMessage(language, "Could not generate an answer. Please try again.", "उत्तर तयार हुन सकेन। कृपया फेरि प्रयास गर्नुहोस्।"), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "error", indexName: store.indexName } };
+    try {
+      const answer = await generateDirectAnswer({ query, language, audience, retrievalUnavailable: true });
+      return { answer, notice: retrievalUnavailableNotice(language), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "unavailable", routedBy: "qwen", indexName: store.indexName } };
+    } catch (fallbackError) {
+      console.error("Fallback Qwen answer failed:", fallbackError.message);
+      return { answer: nativeMessage(language, "Could not generate an answer. Please check that Ollama is running and try again.", "उत्तर तयार हुन सकेन। Ollama चलिरहेको छ कि जाँचेर फेरि प्रयास गर्नुहोस्।"), nextSteps: [], citations: [], meta: { language, vectorReady: true, retrieval: "error", indexName: store.indexName } };
+    }
   }
 }
 
-module.exports = { bootstrapVectorStore, indexDocuments, queryRag, detectLanguage, retrieveLegalSources };
+module.exports = { bootstrapVectorStore, indexDocuments, queryRag, detectLanguage, retrieveLegalSources, finalAnswerContent };

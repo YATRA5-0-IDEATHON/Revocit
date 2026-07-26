@@ -1,7 +1,9 @@
 const savedLanguage = localStorage.getItem("lawyersathi_lang");
 const state = {
   lang: savedLanguage === "ne" ? "ne" : "en",
-  user: null
+  user: null,
+  draftMode: new URLSearchParams(window.location.search).get("draft") === "1",
+  draftIntake: {}
 };
 
 const i18n = {
@@ -15,7 +17,7 @@ const i18n = {
     systemMsg: "Welcome. Ask your legal question to begin.",
     sendBtn: "Ask Assistant",
     thinking: "Preparing response...",
-    sources: "Sources"
+    sources: "Sources", draftOn: "Draft on", draftOff: "Draft"
     ,citizen: "Citizen", lawFirm: "Law Firm", government: "Government", promptOne: "Social violence reporting process", promptTwo: "Law firm review checklist", promptThree: "Government legal action checklist", statusReady: "Workspace ready", placeholder: "Type your legal question..."
   },
   ne: {
@@ -28,7 +30,7 @@ const i18n = {
     systemMsg: "स्वागत छ। सुरु गर्न कानुनी प्रश्न सोध्नुहोस्।",
     sendBtn: "सहायकलाई सोध्नुहोस्",
     thinking: "उत्तर तयार हुँदैछ...",
-    sources: "स्रोतहरू",
+    sources: "स्रोतहरू", draftOn: "मस्यौदा चालु", draftOff: "मस्यौदा",
     citizen: "नागरिक", lawFirm: "कानुनी संस्था", government: "सरकार", promptOne: "सामाजिक हिंसा उजुरी प्रक्रिया", promptTwo: "कानुनी संस्था समीक्षा सूची", promptThree: "सरकारी कानुनी कार्य सूची", statusReady: "कार्यस्थान तयार छ", placeholder: "आफ्नो कानुनी प्रश्न लेख्नुहोस्..."
   }
 };
@@ -58,11 +60,24 @@ function applyLanguage() {
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.getAttribute("data-i18n-placeholder")); });
   document.documentElement.lang = state.lang === "ne" ? "ne" : "en";
   document.querySelectorAll("[data-lang]").forEach((button) => button.classList.toggle("active", button.dataset.lang === state.lang));
+  renderDraftMode();
+}
+
+function renderDraftMode() {
+  const button = document.getElementById("draftMode");
+  if (!button) return;
+  button.classList.toggle("active", state.draftMode);
+  button.setAttribute("aria-pressed", String(state.draftMode));
+  button.textContent = state.draftMode ? t("draftOn") : t("draftOff");
 }
 
 function renderUsage() {
   const node = document.getElementById("usageStatus");
   if (!node || !state.user) return;
+  if (state.user.unlimitedQuestions) {
+    node.textContent = state.lang === "ne" ? "असीमित प्रश्न पहुँच" : "Unlimited question access";
+    return;
+  }
   node.textContent = `${state.user.questionsRemaining} ${state.lang === "ne" ? "प्रश्न बाँकी" : "questions remaining"} · ${state.user.plan === "professional" ? "Professional" : state.user.plan === "standard" ? "Standard" : "Free trial"}`;
 }
 
@@ -101,15 +116,35 @@ function appendMessage(role, html) {
 
 async function queryAssistant(prompt) {
   const audience = document.getElementById("audience").value;
+  if (state.draftMode) {
+    const intakeResponse = await fetch("/api/draft/intake", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt, draft: state.draftIntake })
+    });
+    const intake = await intakeResponse.json();
+    if (!intakeResponse.ok) throw new Error(intake.error || "Draft intake failed");
+    state.draftIntake = intake.draft || {};
+    if (!intake.ready) return { intakeQuestion: intake.question };
+
+    const draftResponse = await fetch("/api/draft-case", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state.draftIntake)
+    });
+    const draft = await draftResponse.json();
+    if (!draftResponse.ok) throw new Error(draft.error || "Draft generation failed");
+    state.draftIntake = {};
+    return { draftPayload: draft };
+  }
+
   const response = await fetch("/api/rag/query", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query: prompt,
-      audience,
-      lang: state.lang
-    })
+    body: JSON.stringify({ query: prompt, audience, lang: state.lang })
   });
   const data = await response.json();
   if (!response.ok) {
@@ -118,7 +153,18 @@ async function queryAssistant(prompt) {
   return data;
 }
 
+function formatMessage(text) {
+  return escapeHtml(text).replace(/\n/g, "<br>");
+}
+
+function openDraftPdf(payload) {
+  sessionStorage.setItem("lawyersathi_pending_draft", JSON.stringify(payload));
+  const draftWindow = window.open("/draft.html?generated=1", "_blank");
+  if (!draftWindow) window.location.assign("/draft.html?generated=1");
+}
+
 function renderAssistantResult(result) {
+  const notice = result.notice ? `<p><strong>${escapeHtml(result.notice)}</strong></p>` : "";
   const nextSteps = (result.nextSteps || []).map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   const citations = (result.citations || [])
     .map((item) => {
@@ -129,7 +175,7 @@ function renderAssistantResult(result) {
 
   appendMessage(
     "assistant",
-    `<p>${escapeHtml(result.answer || "")}</p>
+    `${notice}<p>${formatMessage(result.answer || "")}</p>
      ${nextSteps ? `<ul>${nextSteps}</ul>` : ""}
      <div class="citations">
        <strong>${t("sources")}</strong>
@@ -155,15 +201,21 @@ async function submitQuestion(prompt) {
     if (loadingNode) {
       loadingNode.closest("article")?.remove();
     }
-    renderAssistantResult(result);
-    if (state.user?.plan === "trial") { state.user.questionsRemaining = Math.max(0, state.user.questionsRemaining - 1); renderUsage(); }
+    if (result.draftPayload) {
+      openDraftPdf(result.draftPayload);
+      renderAssistantResult({ answer: result.draftPayload.draft, citations: result.draftPayload.citations });
+      appendMessage("assistant", `<p>${escapeHtml(state.lang === "ne" ? "मस्यौदाको PDF खुल्दैछ। प्रिन्ट संवादमा ‘Save as PDF’ छान्नुहोस्।" : "The draft PDF is opening. Choose ‘Save as PDF’ in the print dialog.")}</p>`);
+    } else if (result.intakeQuestion) {
+      appendMessage("assistant", `<p>${formatMessage(result.intakeQuestion)}</p>`);
+    } else {
+      renderAssistantResult(result);
+    }
+    renderUsage();
   } catch (error) {
     const loadingNode = document.getElementById(loadingId);
     if (loadingNode) {
       loadingNode.closest("article")?.remove();
-      if (String(error.message).includes("five free questions")) {
-        appendMessage("assistant", `<p>${escapeHtml(error.message)} <a href="/subscription.html">${state.lang === "ne" ? "सदस्यता छान्नुहोस्" : "Choose a subscription"}</a></p>`);
-      } else appendMessage("assistant", `<p>${escapeHtml(error.message)}</p>`);
+      appendMessage("assistant", `<p>${escapeHtml(error.message)}</p>`);
     }
   }
 }
@@ -174,6 +226,12 @@ document.querySelectorAll("[data-lang]").forEach((button) => button.addEventList
   applyLanguage();
   renderUsage();
 }));
+
+document.getElementById("draftMode").addEventListener("click", () => {
+  state.draftMode = !state.draftMode;
+  state.draftIntake = {};
+  renderDraftMode();
+});
 
 document.getElementById("send").addEventListener("click", () => {
   const input = document.getElementById("question");
@@ -197,3 +255,6 @@ document.querySelectorAll(".prompt-chip").forEach((button) => {
 
 applyLanguage();
 loadSession();
+if (state.draftMode) {
+  appendMessage("assistant", `<p>${escapeHtml(state.lang === "ne" ? "कुन प्रकारको जाहेरी दरखास्त बनाउन चाहनुहुन्छ? उदाहरण: ‘मलाई बलात्कारको केस हाल्न छ’। तपाईंलाई थाहा भएका घटना विवरण पनि यही सन्देशमा लेख्न सक्नुहुन्छ; त्यसपछि म आवश्यक बाँकी विवरणको स्पष्ट सूची दिन्छु।" : "What type of complaint do you want to prepare? You may include any incident details you already know; I will then list the specific remaining required details.")}</p>`);
+}
