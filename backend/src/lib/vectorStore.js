@@ -37,6 +37,15 @@ async function createVectorStore({ language } = {}) {
       async query(vector, topK) {
         const response = await index.query({ vector, topK, includeMetadata: true });
         return response.matches || [];
+      },
+      async fetch(ids) {
+        const response = await index.fetch(ids);
+        return Object.entries(response.records || {}).map(([id, record]) => ({
+          id,
+          score: 1,
+          values: record.values,
+          metadata: record.metadata || {}
+        }));
       }
     };
   }

@@ -14,6 +14,7 @@ const publicDir = path.resolve(__dirname, "../../frontend/public");
 // Always revalidate frontend assets during development so the active language
 // controller cannot be an older browser-cached copy after a deployment.
 app.use(express.static(publicDir, { setHeaders: (res) => res.setHeader("Cache-Control", "no-cache") }));
+app.get("/logo.png", (req, res) => res.sendFile(path.resolve(__dirname, "../../logo.png")));
 
 app.use("/api", apiRoutes);
 

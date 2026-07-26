@@ -1,4 +1,4 @@
-const { retrieveLegalSources, finalAnswerContent } = require("./ragService");
+const { retrieveLegalSources, finalAnswerContent, translateNepaliQuery } = require("./ragService");
 
 const INTAKE_FIELDS = [
   ["complainant", "निवेदक वा पीडितको नाम"],
@@ -55,6 +55,14 @@ function buildFacts(data) {
     `प्रमाण/साक्षी: ${text(data.evidence) || "[उल्लेख नभएको]"}`,
     `माग गरिएको कारबाही: ${text(data.requestedAction, 1200) || "[उल्लेख नभएको]"}`
   ].join("\n");
+}
+
+function draftCitationTitle(title) {
+  const value = String(title || "").toLowerCase();
+  if (value.includes("criminal procedure code")) return "नेपाल फौजदारी कार्यविधि संहिता";
+  if (value.includes("determination-and-execution-of-sentences")) return "फौजदारी कसुरको सजाय निर्धारण तथा कार्यान्वयन ऐन";
+  if (value.includes("criminal-code-nepal") || value.includes("criminal code nepal")) return "नेपाल फौजदारी संहिता";
+  return "नेपाल कानुनी स्रोत";
 }
 
 function intakeFields(value) {
@@ -182,7 +190,7 @@ async function callOllama({ facts, context }) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0.05 }, messages: [
       { role: "system", content: system },
-      { role: "user", content: `प्रयोगकर्ताले दिएको तथ्य:\n${facts}\n\nसम्बन्धित नेपाली कानुनी अंश:\n${context}` }
+      { role: "user", content: `प्रयोगकर्ताले दिएको तथ्य:\n${facts}\n\nसम्बन्धित कानुनी अंश:\n${context}` }
     ] })
   });
   if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
@@ -208,14 +216,15 @@ async function prepareComplaintDraft(data) {
   const facts = buildFacts(data);
   const retrievalQuery = `${text(data.incidentDetails)} ${text(data.requestedAction)} ${text(data.incidentPlace, 200)}`;
   if (retrievalQuery.trim().length < 12) throw new Error("घटनाको पर्याप्त विवरण आवश्यक छ।");
-  const { matches } = await retrieveLegalSources({ query: retrievalQuery, language: "ne", topK: 5 });
-  if (!matches.length) throw new Error("सम्बन्धित नेपाली कानुनी स्रोत भेटिएन।");
+  const englishQuery = await translateNepaliQuery(retrievalQuery);
+  const { matches } = await retrieveLegalSources({ query: englishQuery, language: "en", topK: 5 });
+  if (!matches.length) throw new Error("सम्बन्धित कानुनी स्रोत भेटिएन।");
   const context = matches.map((match) => match.metadata?.text).filter(Boolean).join("\n\n---\n\n");
   const draft = await callOllama({ facts, context });
   return {
     draft,
     disclaimer: "यो प्रारम्भिक मस्यौदा मात्र हो। पेश वा हस्ताक्षर गर्नुअघि तथ्य, प्रमाण र कानुनी आधार जाँच गर्नुहोस्।",
-    citations: matches.map((match) => ({ title: match.metadata?.title || "कानुनी स्रोत", sourceFile: match.metadata?.sourceFile || "", page: match.metadata?.page || null }))
+    citations: matches.map((match) => ({ title: draftCitationTitle(match.metadata?.title), sourceFile: match.metadata?.sourceFile || "", page: match.metadata?.page || null }))
   };
 }
 

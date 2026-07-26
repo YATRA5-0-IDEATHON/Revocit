@@ -12,8 +12,10 @@
     .language-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .language-selector button { min-height: 38px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: #d9e7f2; background: transparent; font: 700 .74rem inherit; cursor: pointer; }
     .language-selector button.active { color: #102a43; background: #e6c77d; border-color: #e6c77d; }
-    .workspace { height: 100vh; overflow: hidden; grid-template-rows: auto minmax(0, 1fr) auto; }
-    .thread { min-height: 0; }
+    /* Long legal answers must expand the page rather than being trapped inside
+       a short, fixed-height message pane behind the composer. */
+    .workspace { height: auto; min-height: 100vh; overflow: visible; grid-template-rows: auto auto auto; }
+    .thread { min-height: 450px; overflow: visible; }
     .composer { position: relative; z-index: 2; }
     .composer textarea:disabled, .composer button:disabled { cursor: not-allowed; opacity: .55; }
     @media (max-width: 850px) { .workspace { height: auto; min-height: calc(100vh - 210px); overflow: visible; } }
@@ -28,7 +30,7 @@
     .message.system { color:#bdbdbd; background:transparent; border:0; }
     .message.user { align-self:flex-end; background:#2c2c2c; border-radius:25px; }
     .citations { border-color:#3b3b3b; color:#b8b8b8; }.citations strong{color:#e5e5e5;}
-    .composer { width:min(840px,100%); margin:auto auto 30px; grid-template-columns:1fr auto auto; border:1px solid #424242; border-radius:28px; background:#242424; box-shadow:none; }
+    .composer { width:min(840px,100%); margin:auto auto 30px; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; border:1px solid #424242; border-radius:28px; background:#242424; box-shadow:none; }
     .composer textarea { min-height:54px; color:#f4f4f4; background:transparent; }.composer textarea::placeholder{color:#9d9d9d}
     .composer button { width:42px; min-height:42px; padding:0; border-radius:50%; color:#111; background:#f5f5f5; font-size:0; box-shadow:none; }.composer button:after{content:'↑';font-size:1.2rem;font-weight:800}
     .composer .draft-mode { width:auto; min-height:36px; padding:0 13px; border:1px solid #686868; border-radius:18px; color:#efefef; background:#303030; font-size:.75rem; box-shadow:none; }
@@ -36,6 +38,32 @@
     .composer .draft-mode.active { color:#171717; background:#e6c77d; border-color:#e6c77d; }
     .composer:before { content:'Lawyersathi can make mistakes. Check important legal information.'; position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); width:max-content; max-width:90vw; color:#858585; font-size:.67rem; }
     .language-selector button.active { color:#111; background:#fff; }
+    .sidebar .logo { display:block; width:190px; height:76px; margin:0 5px; padding:0; background:url("/logo.png") center/contain no-repeat; color:transparent; }
+    .sidebar .logo span, .sidebar .logo strong { display:none; }
+    /* Light workspace palette aligned with the public site. */
+    body { background:#f3f6f9; color:#183b56; }
+    .chat-layout { background:#f3f6f9; }
+    .sidebar { background:#071c35; border-right:1px solid #173b5e; }
+    .workspace { background:#f3f6f9; }
+    .thread { background:#fff; border:1px solid #d9e4ee; box-shadow:none; }
+    .message { color:#183b56; background:#f8fafc; border:1px solid #d9e4ee; }
+    .message.assistant { color:#183b56; background:#fff; border-color:#d9e4ee; padding:13px 15px; }
+    .message.system { color:#315b47; background:#f3faf6; border-color:#d3e9db; }
+    .message.user { color:#fff; background:#102a43; border-color:#102a43; }
+    .citations { color:#627d98; border-color:#d9e4ee; }
+    .citations strong { color:#102a43; }
+    .composer { background:#fff; border:1px solid #d9e4ee; box-shadow:none; }
+    .composer textarea { color:#183b56; background:#f5f8fb; }
+    .composer textarea::placeholder { color:#627d98; }
+    .composer button { color:#fff; background:#102a43; }
+    .composer .draft-mode { color:#183b56; background:#fff; border-color:#b8c9d9; }
+    .composer .draft-mode.active { color:#102a43; background:#e6c77d; border-color:#d4a646; }
+    .composer-input { position:relative; min-width:0; }
+    .composer-input textarea { padding-right:56px; }
+    .composer .mic-button { position:absolute; top:50%; right:12px; transform:translateY(-50%); display:grid; place-items:center; width:34px; min-height:34px; padding:0; border:0; border-radius:50%; color:#627d98; background:transparent; cursor:default; box-shadow:none; }
+    .composer .mic-button:after { content:none; }
+    .composer .mic-button svg { width:17px; height:17px; stroke:currentColor; }
+    .composer:before { color:#627d98; }
     @media (max-width:850px){.chat-layout{grid-template-columns:1fr}.workspace{padding:12px}.thread{padding:20px 5%}.sidebar{display:none}.composer:before{display:none}}
   </style>
 </head>
@@ -87,7 +115,7 @@
 
       <section class="composer">
         <label class="sr-only" for="question">Question</label>
-        <textarea id="question" rows="3" placeholder="Type your legal question..." data-i18n-placeholder="placeholder"></textarea>
+        <div class="composer-input"><textarea id="question" rows="3" placeholder="Type your legal question..." data-i18n-placeholder="placeholder"></textarea><button class="mic-button" type="button" aria-label="Microphone (coming soon)" title="Microphone coming soon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"></path></svg></button></div>
         <button id="draftMode" class="draft-mode" type="button" aria-pressed="false">Draft</button>
         <button id="send" type="button" data-i18n="sendBtn">Ask Assistant</button>
       </section>

@@ -72,8 +72,13 @@ then download the model once on each laptop before starting the app:
 ollama pull qwen3:4b
 ```
 
-Nepali questions are detected automatically and Qwen answers in Nepali using only
-Nepali source passages. No query-time translation is used for retrieval.
+Nepali questions are detected automatically and Qwen answers in Nepali. Chat
+retrieval uses the clean English statutory PDFs with deterministic Nepali legal
+term expansion because the supplied Nepali PDFs are OCR scans; this avoids
+corrupted OCR text being treated as legal authority. English questions search the
+English corpus directly. Both paths retrieve a wider candidate set and use
+Pinecone's multilingual cross-encoder reranker before generating a
+source-grounded answer; a local hybrid reranker is retained only as a fallback.
 
 4. Start the app:
 
